@@ -34,7 +34,10 @@ export function RichEditor({ value, onChange, placeholder }: {
 }) {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const colorRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [textColor, setTextColor] = useState('#ff0000');
+
   const editor = useEditor({
     extensions: [StarterKit, Image],
     content: value || '<p></p>',
@@ -55,10 +58,6 @@ export function RichEditor({ value, onChange, placeholder }: {
 
   if (!editor) return <div className="re-wrap" style={{ minHeight: 200 }} />;
 
-  /* 이미지는 **올려서** 넣는다 (v2.0 사용자 요청 — 예전엔 URL을 직접 적게 했다).
-     다른 이미지들과 같은 경로(putBlob)를 타므로 서버 모드면 저장소에 올라가고 공개 주소가 나온다.
-     서버가 없는 로컬 모드에서는 그 주소가 이 브라우저 안에서만 뜻이 있는 파일 id라
-     <img>가 읽지 못한다 — 그때만 본문에 그대로 심는다(개발·오프라인용). */
   const insertImage = async (f?: File) => {
     if (!f) return;
     setBusy(true);
@@ -67,10 +66,22 @@ export function RichEditor({ value, onChange, placeholder }: {
       const src = /^https?:/.test(ref) ? ref : await toDataUrl(f);
       editor.chain().focus().setImage({ src }).run();
     } catch (e) {
-      // 조용히 실패하면 「올렸는데 왜 안 들어가지」가 된다 — 사유를 그대로 보여 준다
       toast(`이미지를 올리지 못했습니다 — ${e instanceof Error ? e.message : String(e)}`);
     }
     setBusy(false);
+  };
+
+  // 선택한 영역에 글자 색상 적용
+  const applyTextColor = (color: string) => {
+    setTextColor(color);
+    const { from, to } = editor.state.selection;
+    if (from === to) return; // 드래그 선택 영역이 없으면 실행 안함
+    
+    // HTML span style 태그로 색상 적용
+    const selectedText = editor.state.doc.textBetween(from, to, ' ');
+    if (selectedText) {
+      editor.chain().focus().insertContent(`<span style="color: ${color};">${selectedText}</span>`).run();
+    }
   };
 
   return (
@@ -82,6 +93,24 @@ export function RichEditor({ value, onChange, placeholder }: {
           onClick={() => editor.chain().focus().toggleItalic().run()} />
         <TBtn title="취소선" label={<s>S</s>} on={editor.isActive('strike')}
           onClick={() => editor.chain().focus().toggleStrike().run()} />
+        
+        {/* 글자 색상 선택 팔레트 버튼 */}
+        <span className="re-sep" />
+        <div style={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
+          <TBtn 
+            title="글자 색상" 
+            label={<span style={{ color: textColor, fontWeight: 'bold' }}>A</span>} 
+            onClick={() => colorRef.current?.click()} 
+          />
+          <input 
+            ref={colorRef}
+            type="color" 
+            value={textColor}
+            onChange={e => applyTextColor(e.target.value)}
+            style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} 
+          />
+        </div>
+
         <span className="re-sep" />
         <TBtn title="제목" label="H2" on={editor.isActive('heading', { level: 2 })}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} />
@@ -100,15 +129,13 @@ export function RichEditor({ value, onChange, placeholder }: {
           onClick={() => { if (!busy) fileRef.current?.click(); }} />
         <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; void insertImage(f); }} />
-        {/* 실행 취소·다시 실행은 모바일에서 숨김 — 툴바가 두 줄로 넘어가 본문 영역을 침범 (v1.9 사용자 확정)
-            (단축키 Ctrl+Z / Ctrl+Shift+Z는 그대로 동작) */}
+        
         <span className="re-sep re-hide-m" />
         <span className="re-hide-m" style={{ display: 'contents' }}>
           <TBtn title="실행 취소" label="↶" onClick={() => editor.chain().focus().undo().run()} />
           <TBtn title="다시 실행" label="↷" onClick={() => editor.chain().focus().redo().run()} />
         </span>
       </div>
-      {/* 플레이스홀더는 본문 영역 기준으로 — 툴바가 두 줄이 돼도 안 밀림 (v1.9 사용자 발견) */}
       <div className="re-body">
         <EditorContent editor={editor} />
         {placeholder && editor.isEmpty && <div className="re-ph">{placeholder}</div>}
