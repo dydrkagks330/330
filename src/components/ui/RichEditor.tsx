@@ -1,10 +1,11 @@
 'use client';
 // 리치 텍스트 에디터 (TipTap) — 프로필 탭 등 HTML 콘텐츠 작성용
-// 자체 스타일 툴바 (7장 — 기본 UI 금지) · 출력은 HTML, 저장 시 새니타이즈는 렌더 쪽에서 (6.3)
 import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
 import { putBlob } from '@/lib/blobStore';
 import { useToast } from '@/components/ui/Toast';
 
@@ -36,10 +37,15 @@ export function RichEditor({ value, onChange, placeholder }: {
   const fileRef = useRef<HTMLInputElement>(null);
   const colorRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [textColor, setTextColor] = useState('#ff0000');
+  const [textColor, setTextColor] = useState('#570a0a');
 
   const editor = useEditor({
-    extensions: [StarterKit, Image],
+    extensions: [
+      StarterKit,
+      Image,
+      TextStyle,
+      Color,
+    ],
     content: value || '<p></p>',
     immediatelyRender: false,
     editorProps: {
@@ -48,12 +54,10 @@ export function RichEditor({ value, onChange, placeholder }: {
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
   });
 
-  // 외부 값이 완전히 바뀐 경우(탭 전환) 동기화
   useEffect(() => {
     if (editor && value !== editor.getHTML() && !editor.isFocused) {
       editor.commands.setContent(value || '<p></p>', { emitUpdate: false });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, editor]);
 
   if (!editor) return <div className="re-wrap" style={{ minHeight: 200 }} />;
@@ -71,17 +75,11 @@ export function RichEditor({ value, onChange, placeholder }: {
     setBusy(false);
   };
 
-  // 선택한 영역에 글자 색상 적용
-  const applyTextColor = (color: string) => {
-    setTextColor(color);
-    const { from, to } = editor.state.selection;
-    if (from === to) return; // 드래그 선택 영역이 없으면 실행 안함
-    
-    // HTML span style 태그로 색상 적용
-    const selectedText = editor.state.doc.textBetween(from, to, ' ');
-    if (selectedText) {
-      editor.chain().focus().insertContent(`<span style="color: ${color};">${selectedText}</span>`).run();
-    }
+  const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newColor = e.target.value;
+    setTextColor(newColor);
+    // 선택한 텍스트 범위에 직접 TipTap 색상 체인 적용 (태그 문자열을 집어넣지 않음)
+    editor.chain().focus().setColor(newColor).run();
   };
 
   return (
@@ -94,7 +92,7 @@ export function RichEditor({ value, onChange, placeholder }: {
         <TBtn title="취소선" label={<s>S</s>} on={editor.isActive('strike')}
           onClick={() => editor.chain().focus().toggleStrike().run()} />
         
-        {/* 글자 색상 선택 팔레트 버튼 */}
+        {/* 색상 선택 버튼 */}
         <span className="re-sep" />
         <div style={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
           <TBtn 
@@ -106,7 +104,7 @@ export function RichEditor({ value, onChange, placeholder }: {
             ref={colorRef}
             type="color" 
             value={textColor}
-            onChange={e => applyTextColor(e.target.value)}
+            onChange={handleColorChange}
             style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} 
           />
         </div>
