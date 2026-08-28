@@ -37,7 +37,7 @@ export function RichEditor({ value, onChange, placeholder }: {
   const fileRef = useRef<HTMLInputElement>(null);
   const colorRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [textColor, setTextColor] = useState('#570a0a');
+  const [textColor, setTextColor] = useState('#1a0f0f');
 
   const editor = useEditor({
     extensions: [
@@ -48,15 +48,30 @@ export function RichEditor({ value, onChange, placeholder }: {
     ],
     content: value || '<p></p>',
     immediatelyRender: false,
+    parseOptions: {
+      preserveWhitespace: 'full',
+    },
     editorProps: {
       attributes: { class: 're-content prose' },
     },
-    onUpdate: ({ editor: e }) => onChange(e.getHTML()),
+    onUpdate: ({ editor: e }) => {
+      onChange(e.getHTML());
+    },
   });
 
   useEffect(() => {
-    if (editor && value !== editor.getHTML() && !editor.isFocused) {
-      editor.commands.setContent(value || '<p></p>', { emitUpdate: false });
+    if (!editor) return;
+    
+    // 이스케이프된 HTML 태그 문자열이 강제로 넘어온 경우 정상 HTML로 복원
+    let cleanValue = value || '<p></p>';
+    if (cleanValue.includes('&lt;span') || cleanValue.includes('&lt;/span&gt;')) {
+      const txt = document.createElement('textarea');
+      txt.innerHTML = cleanValue;
+      cleanValue = txt.value;
+    }
+
+    if (cleanValue !== editor.getHTML() && !editor.isFocused) {
+      editor.commands.setContent(cleanValue, { emitUpdate: false });
     }
   }, [value, editor]);
 
@@ -78,7 +93,6 @@ export function RichEditor({ value, onChange, placeholder }: {
   const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newColor = e.target.value;
     setTextColor(newColor);
-    // 선택한 텍스트 범위에 직접 TipTap 색상 체인 적용 (태그 문자열을 집어넣지 않음)
     editor.chain().focus().setColor(newColor).run();
   };
 
@@ -111,9 +125,9 @@ export function RichEditor({ value, onChange, placeholder }: {
 
         <span className="re-sep" />
         <TBtn title="제목" label="H2" on={editor.isActive('heading', { level: 2 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} />
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 })} />
         <TBtn title="소제목" label="H3" on={editor.isActive('heading', { level: 3 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} />
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 })} />
         <span className="re-sep" />
         <TBtn title="글머리 목록" label="•≡" on={editor.isActive('bulletList')}
           onClick={() => editor.chain().focus().toggleBulletList().run()} />
